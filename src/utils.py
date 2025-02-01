@@ -31,8 +31,3 @@ def store_qr_code(restaurant_id, table_number):
     
     qr_collection.insert_one(qr_data)
     return unique_token
-
-def upload_to_s3(file_stream, file_name):
-    """Upload a file object to S3 and return its URL."""
-    s3_client.upload_fileobj(file_stream, S3_BUCKET, file_name, ExtraArgs={'ContentType': 'image/png'})
-    return f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{file_name}"
