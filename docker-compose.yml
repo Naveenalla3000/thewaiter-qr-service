@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qrservice-app
+    ports:
+      - "5050:5050"
+    depends_on:
+      - mongo
+    environment:
+      - PORT=5050
+      - DOMAIN=http://localhost
+      - S3_BUCKET=waitercaller-s3-bucket
+      - S3_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=AKIA4KLKZCHSJI4UJZJS
+      - AWS_SECRET_ACCESS_KEY=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
+      - AWS_DEFAULT_REGION=us-east-1
+      - MONGO_URI=mongodb://admin:password@mongo:27017/
+      - MONGO_DB_NAME=waitercaller
+      - MONGO_QR_COLLECTION=qr_codes
+    networks:
+      - qrservice-network
+
+  mongo:
+    image: mongo:latest
+    container_name: mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - qrservice-network
+
+networks:
+  qrservice-network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+    driver: local
