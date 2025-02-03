@@ -5,14 +5,18 @@ from flask import Flask, request, jsonify
 import qrcode
 import io
 import uuid
+import datetime
+from PIL import Image, ImageDraw, ImageFont
 
 app = Flask(__name__)
 
 from .mongo import qr_collection
 from .utils import upload_to_s3,store_qr_code
+from .kafka import producer
 
 PORT = os.getenv('PORT') or 5050
 DOMAIN = os.getenv('DOMAIN') or f'http://localhost/{PORT}'
+KAFKA_TOPIC = os.getenv('KAFKA_TOPIC')
 
 @app.route('/generate-qr', methods=['GET'])
 def generate_qr():
@@ -41,8 +45,35 @@ def generate_qr():
     qr.add_data(f'{DOMAIN}/link/{unique_token}')
     qr.make(fit=True)
 
+    qr_img = qr.make_image(fill='black', back_color='white').convert('RGB')
+
+    width, height = qr_img.size
+    circle_radius = width // 8
+    circle_center = (width // 2, height // 2)
+
+    overlay = Image.new("RGBA", qr_img.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(overlay)
+    
+    draw.ellipse(
+        (circle_center[0] - circle_radius, circle_center[1] - circle_radius, 
+         circle_center[0] + circle_radius, circle_center[1] + circle_radius), 
+        fill="white",
+        outline="black",
+        width=6
+    )
+
+    font = ImageFont.load_default(size=60)
+    print("Default font used due to font loading failure.")
+
+    text_size = draw.textbbox((0, 0), table_number, font=font)
+    text_x = circle_center[0] - (text_size[2] - text_size[0]) // 2
+    text_y = circle_center[1] - (text_size[3] - text_size[1]) // 1.27
+    draw.text((text_x, text_y), table_number, fill="black", font=font,)
+
+    qr_img = Image.alpha_composite(qr_img.convert("RGBA"), overlay)
+
     buffer = io.BytesIO()
-    qr.make_image().save(buffer, 'PNG')
+    qr_img.save(buffer, format="PNG")
     buffer.seek(0)
 
     file_name = f"qr_codes/{unique_token}.png"
@@ -75,12 +106,19 @@ def scan_qr():
 
     if qr_code["status"] == "invalid":
         return {"error": "QR expired. Contact queries@naveenalla.in."}, 400
+    
+    restaurant_id = qr_code["restaurant_id"]
+    table_number = qr_code["table_number"]
 
-    return {
-        "message": "QR is valid",
-        "restaurant_id": qr_code["restaurant_id"],
-        "table_number": qr_code["table_number"]
+    alert_message = {
+        "restaurant_id": restaurant_id,
+        "table_number": table_number,
+        "timestamp": str(datetime.datetime.now()),
+        "message": f"Customer arrived at Table {table_number}. Please take the order."
     }
+    producer.send(KAFKA_TOPIC, alert_message)
+
+    return {"message": "Waiter has been notified!"}
 
 
 def generate_unique_token():
