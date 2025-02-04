@@ -22,7 +22,6 @@ KAFKA_TOPIC = os.getenv('KAFKA_TOPIC')
 def generate_qr():
     restaurant_id = request.args.get('restaurantId')
     table_number = request.args.get('tableNumber')
-
     if not restaurant_id or not table_number:
         return {"error": "Missing parameters"}, 400
     
@@ -32,9 +31,7 @@ def generate_qr():
             return jsonify({"message": "QR already generated", "qr_url": qr_code['qr_url']})
         elif qr_code['status'] == 'invalid':
             qr_collection.delete_one({"qr_token": qr_code['qr_token']})
-
     unique_token = store_qr_code(restaurant_id, table_number)
-
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -44,44 +41,13 @@ def generate_qr():
     
     qr.add_data(f'{DOMAIN}/link/{unique_token}')
     qr.make(fit=True)
-
-    qr_img = qr.make_image(fill='black', back_color='white').convert('RGB')
-
-    width, height = qr_img.size
-    circle_radius = width // 8
-    circle_center = (width // 2, height // 2)
-
-    overlay = Image.new("RGBA", qr_img.size, (255, 255, 255, 0))
-    draw = ImageDraw.Draw(overlay)
-    
-    draw.ellipse(
-        (circle_center[0] - circle_radius, circle_center[1] - circle_radius, 
-         circle_center[0] + circle_radius, circle_center[1] + circle_radius), 
-        fill="white",
-        outline="black",
-        width=6
-    )
-
-    font = ImageFont.load_default(size=60)
-    print("Default font used due to font loading failure.")
-
-    text_size = draw.textbbox((0, 0), table_number, font=font)
-    text_x = circle_center[0] - (text_size[2] - text_size[0]) // 2
-    text_y = circle_center[1] - (text_size[3] - text_size[1]) // 1.27
-    draw.text((text_x, text_y), table_number, fill="black", font=font,)
-
-    qr_img = Image.alpha_composite(qr_img.convert("RGBA"), overlay)
-
     buffer = io.BytesIO()
-    qr_img.save(buffer, format="PNG")
+    qr.make_image().save(buffer, 'PNG')
     buffer.seek(0)
-
     file_name = f"qr_codes/{unique_token}.png"
     s3_url = upload_to_s3(buffer, file_name)
-
     qr_collection.update_one({"qr_token": unique_token}, {"$set": {"qr_url": s3_url}})
     return jsonify({"message": "QR generated", "qr_url": s3_url})
-
 
 @app.route('/delete/<qr_token>', methods=['POST'])
 def invalidate_qr(qr_token):
