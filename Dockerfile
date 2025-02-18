@@ -8,4 +8,8 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY . /app
 EXPOSE 5050
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5050", "src.app:app"]
+
+# Verify if run.py exists
+RUN ls -la /app
+
+ENTRYPOINT [ "python", "run.py" ]
