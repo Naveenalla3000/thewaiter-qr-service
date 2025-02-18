@@ -26,7 +26,6 @@ def store_qr_code(restaurant_id, table_number):
         "table_number": table_number,
         "qr_token": unique_token,
         "qr_url": "",
-        "status": "active",
     }
     
     qr_collection.insert_one(qr_data)
